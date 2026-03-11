@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON格式化测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f7;
+        }
+
+        .test-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #1d1d1f;
+            margin-top: 0;
+        }
+
+        .test-case {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+
+        .test-title {
+            font-weight: 600;
+            color: #007aff;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        button {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #0051d5;
+        }
+
+        .info {
+            background: #e3f2fd;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 13px;
+            color: #1976d2;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>JSON 格式化功能测试</h1>
+
+    <div class="test-section">
+        <h2>✅ 已完成的功能更新</h2>
+        <div class="info">
+            <strong>1. 加载效果：</strong>当输入JSON数据超过10,000字符时，会显示旋转的加载动画和"正在格式化..."提示<br>
+            <strong>2. 错误显示：</strong>格式化失败时，错误信息会直接显示在输出框中（红色文字），包含详细的错误原因和位置
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 测试用例</h2>
+
+        <div class="test-case">
+            <div class="test-title">测试1: 生成大数据量JSON（触发加载效果）</div>
+            <p>点击下面的按钮生成一个超过10,000字符的JSON，然后复制到扩展的JSON格式化模块中测试</p>
+            <button onclick="generateLargeJSON()">生成大JSON数据</button>
+            <textarea id="largeJson" readonly></textarea>
+        </div>
+
+        <div class="test-case">
+            <div class="test-title">测试2: 错误的JSON（测试错误显示）</div>
+            <p>复制下面的错误JSON到扩展中，应该在输出框看到红色的错误信息</p>
+            <textarea readonly>{
+  "name": "test",
+  "value": 123,
+  "invalid": 
+}</textarea>
+        </div>
+
+        <div class="test-case">
+            <div class="test-title">测试3: 正常JSON（测试正常格式化）</div>
+            <p>复制下面的JSON到扩展中，应该正常格式化</p>
+            <textarea readonly>{"name":"test","value":123,"nested":{"key":"value","array":[1,2,3]}}</textarea>
+        </div>
+
+        <div class="test-case">
+            <div class="test-title">测试4: 缺少引号的错误</div>
+            <p>测试详细的错误位置提示</p>
+            <textarea readonly>{"name": test, "value": 123}</textarea>
+        </div>
+
+        <div class="test-case">
+            <div class="test-title">测试5: 缺少逗号的错误</div>
+            <p>测试错误上下文显示</p>
+            <textarea readonly>{
+  "name": "test"
+  "value": 123
+}</textarea>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>📝 使用说明</h2>
+        <ol>
+            <li>打开Chrome扩展的app.html页面</li>
+            <li>切换到"JSON 格式化"标签</li>
+            <li>复制上面的测试用例到输入框中</li>
+            <li>观察输出框的变化：
+                <ul>
+                    <li>大数据量：应该看到加载动画</li>
+                    <li>错误JSON：应该在输出框看到红色的错误信息</li>
+                    <li>正常JSON：应该正常格式化，文字为黑色</li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+
+    <script>
+        function generateLargeJSON() {
+            const largeData = {
+                metadata: {
+                    generated: new Date().toISOString(),
+                    count: 500,
+                    description: "这是一个用于测试加载效果的大JSON数据"
+                },
+                items: Array.from({ length: 500 }, (_, i) => ({
+                    id: i,
+                    name: `Item ${i}`,
+                    description: `This is a detailed description for item number ${i}. It contains enough text to make the JSON file large.`,
+                    metadata: {
+                        created: new Date().toISOString(),
+                        updated: new Date().toISOString(),
+                        tags: ['tag1', 'tag2', 'tag3', 'tag4', 'tag5'],
+                        category: `Category ${i % 10}`,
+                        priority: i % 5,
+                        status: ['active', 'pending', 'completed'][i % 3]
+                    },
+                    properties: {
+                        color: ['red', 'blue', 'green', 'yellow'][i % 4],
+                        size: ['small', 'medium', 'large'][i % 3],
+                        weight: Math.random() * 100,
+                        dimensions: {
+                            width: Math.random() * 50,
+                            height: Math.random() * 50,
+                            depth: Math.random() * 50
+                        }
+                    }
+                }))
+            };
+
+            const jsonString = JSON.stringify(largeData);
+            document.getElementById('largeJson').value = jsonString;
+            document.getElementById('largeJson').rows = 10;
+
+            alert(`已生成 ${jsonString.length.toLocaleString()} 字符的JSON数据！\n复制到扩展中应该会看到加载动画。`);
+        }
+    </script>
+</body>
+
+</html>

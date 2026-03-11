@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>DOCX 解析器测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+
+        .test-area {
+            border: 2px dashed #007aff;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+            background: #f5f7fa;
+        }
+
+        button {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📄 DOCX 解析器测试工具</h1>
+
+    <div class="status info">
+        <strong>测试说明：</strong>选择一个 .docx 文件来测试解析功能
+    </div>
+
+    <div class="test-area">
+        <h3>选择 DOCX 文件</h3>
+        <input type="file" id="fileInput" accept=".docx" />
+        <br><br>
+        <button onclick="testParse()">开始解析测试</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="result"></div>
+
+    <!-- 加载必要的脚本 -->
+    <script src="inflate.js"></script>
+    <script src="docx-parser.js"></script>
+
+    <script>
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status ' + type;
+            statusDiv.innerHTML = '<strong>' + message + '</strong>';
+        }
+
+        function showResult(text) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = text;
+        }
+
+        async function testParse() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showStatus('请先选择一个文件', 'error');
+                return;
+            }
+
+            if (!file.name.endsWith('.docx')) {
+                showStatus('请选择 .docx 格式的文件', 'error');
+                return;
+            }
+
+            showStatus('正在读取文件...', 'info');
+            showResult('');
+
+            try {
+                // 读取文件
+                const arrayBuffer = await file.arrayBuffer();
+
+                showStatus('正在解析 DOCX...', 'info');
+
+                // 测试基础解析
+                console.log('=== 开始测试 ===');
+                console.log('文件名:', file.name);
+                console.log('文件大小:', (file.size / 1024).toFixed(2), 'KB');
+
+                // 检查函数是否可用
+                if (typeof window.extractTextFromDocxEnhanced !== 'function') {
+                    showStatus('错误：增强解析器未加载', 'error');
+                    console.error('extractTextFromDocxEnhanced 函数不可用');
+                    return;
+                }
+
+                if (typeof window.inflateData !== 'function') {
+                    showStatus('警告：解压缩工具未加载，将使用降级方案', 'error');
+                    console.warn('inflateData 函数不可用');
+                }
+
+                // 调用解析器
+                const text = await window.extractTextFromDocxEnhanced(arrayBuffer, file.name);
+
+                console.log('解析结果长度:', text.length);
+                console.log('解析结果:', text.substring(0, 200));
+
+                // 显示结果
+                if (text && text.length > 0 && !text.includes('[无法从')) {
+                    showStatus('✅ 解析成功！提取了 ' + text.length + ' 个字符', 'success');
+                    showResult(text);
+                } else {
+                    showStatus('⚠️ 解析失败或文件为空', 'error');
+                    showResult(text || '无内容');
+                }
+
+            } catch (error) {
+                showStatus('❌ 解析出错: ' + error.message, 'error');
+                console.error('解析错误:', error);
+                showResult('错误详情:\n' + error.stack);
+            }
+        }
+
+        // 页面加载时检查
+        window.addEventListener('load', () => {
+            console.log('=== 环境检查 ===');
+            console.log('inflateData 可用:', typeof window.inflateData === 'function');
+            console.log('extractTextFromDocxEnhanced 可用:', typeof window.extractTextFromDocxEnhanced === 'function');
+            console.log('DecompressionStream 可用:', typeof DecompressionStream !== 'undefined');
+
+            if (typeof window.extractTextFromDocxEnhanced === 'function') {
+                showStatus('✅ 解析器已就绪，请选择文件开始测试', 'success');
+            } else {
+                showStatus('❌ 解析器加载失败，请检查脚本文件', 'error');
+            }
+        });
+    </script>
+</body>
+
+</html>

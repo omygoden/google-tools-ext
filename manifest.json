@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "SQL/JSON → Go Struct (Local)",
+  "version": "1.0.4",
+  "description": "Convert SQL/JSON to Golang struct with customizable tags.",
+  "action": {
+    "default_title": "Go Struct",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ]
+}

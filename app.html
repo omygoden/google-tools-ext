@@ -1,0 +1,1402 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <title>SQL / JSON → Go Struct</title>
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <style>
+    /* ===== 全屏自适应 ===== */
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      width: auto !important;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .app {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 10;
+      border-bottom: 1px solid #eee;
+      padding: 4px 8px 2px;
+      /* 减少 tab 栏留白 */
+    }
+
+    /* 主体区域：剩余空间全部给 content */
+    .content {
+      flex: 1;
+      min-height: 0;
+      /* 关键：允许内部滚动/伸缩 */
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 主 panel 撑满 */
+    .main-panel {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      padding: 12px;
+    }
+
+    /* Go Struct 主 panel 需要特殊布局 */
+    #main-tab-go-struct {
+      display: none;
+      flex-direction: column;
+      gap: 0;
+      padding: 0;
+    }
+
+    #main-tab-go-struct.active {
+      display: flex;
+    }
+
+    /* JSON Format 主 panel */
+    #main-tab-json-format {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #main-tab-json-format.active {
+      display: flex;
+    }
+
+    /* Go Struct 的内容区域 */
+    #main-tab-go-struct>.panel {
+      flex: 1;
+      min-height: 0;
+      padding: 12px;
+    }
+
+    /* panel 本身也要能撑满 */
+    .panel {
+      height: 100%;
+    }
+
+    /* ===== 顶部两行：字段行 + 工具条行 ===== */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 12px;
+      align-items: end;
+    }
+
+    /* 左上角工具条：放在输入框上方左侧 */
+    .toolbar-row {
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* ===== 左右分栏：占满剩余空间 ===== */
+    .split {
+      flex: 1;
+      min-height: 0;
+      /* 关键 */
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      /* 输入占1/3，输出占2/3 */
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .panel-box {
+      height: 100%;
+      min-height: 0;
+      /* 关键 */
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-title {
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 3px;
+      /* 减少一半：6px → 3px */
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* textarea 占满容器 */
+    .panel-box textarea {
+      flex: 1;
+      min-height: 0;
+      /* 关键 */
+      resize: none;
+      width: 100%;
+    }
+
+    /* 让 tab 面板在 content 内撑满 */
+    #tab-sql.panel.active,
+    #tab-json.panel.active,
+    #tab-map.panel.active {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      height: 100%;
+      min-height: 0;
+    }
+
+    /* MAP 页面滚动 */
+    #tab-map {
+      overflow: auto;
+      min-height: 0;
+    }
+
+    footer.msg {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transform: translateX(400px);
+      opacity: 0;
+      border: none !important;
+      background: transparent;
+      white-space: nowrap;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+    }
+
+    /* 避免 styles.css 的 textarea min-height 影响这里 */
+    textarea {
+      min-height: unset !important;
+    }
+
+    /* 行号容器 */
+    .textarea-with-lines {
+      position: relative;
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      border: 0.5px solid rgba(0, 0, 0, 0.15);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    /* 行号列 */
+    .line-numbers {
+      flex-shrink: 0;
+      width: 45px;
+      background: #f5f5f7;
+      border-right: none;
+      padding: 8px 8px 8px 4px;
+      text-align: right;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #86868b;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* 带行号的 textarea */
+    .textarea-with-lines textarea {
+      flex: 1;
+      border: none;
+      border-radius: 0;
+      padding: 8px 12px;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      resize: none;
+      overflow-y: auto;
+      overflow-x: hidden !important;
+      /* 强制隐藏横向滚动条 */
+      white-space: pre-wrap;
+      /* 保留空格和换行，允许自动换行 */
+      word-wrap: break-word;
+      /* 长单词换行 */
+      word-break: break-all;
+      /* 强制在任意字符处换行 */
+      overflow-wrap: break-word;
+      /* 现代浏览器的换行属性 */
+    }
+
+    .textarea-with-lines textarea:focus {
+      outline: none;
+      box-shadow: none;
+      border: none;
+    }
+
+    /* 让行号和文本同步滚动 */
+    .line-numbers {
+      overflow-y: hidden;
+      pointer-events: none;
+    }
+
+    /* Tab 图标样式 */
+    .main-tab .tab-icon {
+      font-size: 16px;
+      margin-right: 6px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    /* 自定义滚动条样式 - 更细更美观 */
+    .textarea-with-lines textarea::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .textarea-with-lines textarea::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .textarea-with-lines textarea::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+    }
+
+    .textarea-with-lines textarea::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    /* Firefox 滚动条样式 */
+    .textarea-with-lines textarea {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+    }
+
+    /* 专门针对 JSON 输出框 - 强制自动换行 */
+    #jsonFormatOutput {
+      overflow-x: hidden !important;
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      word-break: break-all !important;
+      overflow-wrap: break-word !important;
+    }
+
+    /* JSON 可点击包装器 - 这是实际显示的元素 */
+    .json-clickable-wrapper {
+      flex: 1;
+      padding: 8px 12px;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-y: auto;
+      overflow-x: hidden !important;
+      /* 强制隐藏横向滚动条 */
+      white-space: pre-wrap !important;
+      /* 保留格式，允许换行 */
+      word-wrap: break-word !important;
+      /* 长单词换行 */
+      word-break: break-all !important;
+      /* 强制在任意字符处换行 */
+      overflow-wrap: break-word !important;
+      /* 现代浏览器支持 */
+      background: #ffffff;
+      border: none;
+      border-radius: 0;
+    }
+
+    /* JSON 行容器 - 允许内容换行 */
+    .json-line {
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      word-break: break-all !important;
+      overflow-wrap: break-word !important;
+    }
+
+    /* JSON 字符串值 - 允许长字符串换行 */
+    .json-string {
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      word-break: break-all !important;
+      overflow-wrap: break-word !important;
+      display: inline !important;
+      /* 保持 inline，但允许换行 */
+    }
+
+    /* ===== 文件管理模块专属样式 ===== */
+    #main-tab-file-manager {
+      display: none;
+      flex-direction: column;
+      padding: 12px;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    #main-tab-file-manager.active {
+      display: flex;
+    }
+
+    /* ===== 字数统计模块专属样式 ===== */
+    #main-tab-word-counter {
+      display: none;
+      flex-direction: column;
+      padding: 12px;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    #main-tab-word-counter.active {
+      display: flex;
+    }
+
+    #wcInput {
+      flex: 1;
+      min-height: 0;
+      resize: none;
+      font-size: 14px;
+      line-height: 1.7;
+      padding: 12px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 10px;
+      background: #fafafa;
+      font-family: -apple-system, 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+      transition: border-color 0.2s;
+    }
+
+    #wcInput:focus {
+      outline: none;
+      border-color: #007aff;
+      background: #fff;
+    }
+
+    /* 统计卡片网格 */
+    .wc-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+      overflow-y: auto;
+    }
+
+    .wc-stat-card {
+      background: #fff;
+      border: 0.5px solid rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: box-shadow 0.2s, transform 0.15s;
+    }
+
+    .wc-stat-card:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .wc-stat-highlight {
+      background: linear-gradient(135deg, #007aff 0%, #0055cc 100%);
+      border-color: transparent;
+    }
+
+    .wc-stat-highlight .wc-stat-value,
+    .wc-stat-highlight .wc-stat-label,
+    .wc-stat-highlight .wc-stat-desc {
+      color: #fff !important;
+    }
+
+    .wc-stat-icon {
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .wc-stat-body {
+      min-width: 0;
+    }
+
+    .wc-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1d1d1f;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .wc-stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #555;
+      margin-top: 2px;
+    }
+
+    .wc-stat-desc {
+      font-size: 10px;
+      color: #86868b;
+      margin-top: 1px;
+    }
+
+    /* 空状态占位 */
+    #wcPlaceholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: #86868b;
+      gap: 8px;
+    }
+  </style>
+
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- ===== Header ===== -->
+    <header>
+      <div style="padding: 0px 12px 6px;">
+        <!-- 主 Tabs -->
+        <div class="main-tabs">
+          <button class="main-tab" data-main-tab="go-struct">
+            <span class="tab-icon">⚙️</span>Go Struct 转换
+          </button>
+          <button class="main-tab active" data-main-tab="json-format">
+            <span class="tab-icon">📋</span>JSON 格式化
+          </button>
+          <button class="main-tab" data-main-tab="url-tools">
+            <span class="tab-icon">🔗</span>URL 工具
+          </button>
+          <button class="main-tab" data-main-tab="ip-query">
+            <span class="tab-icon">🌐</span>IP 查询
+          </button>
+          <button class="main-tab" data-main-tab="crypto-tools">
+            <span class="tab-icon">🔐</span>编解码/哈希
+          </button>
+          <button class="main-tab" data-main-tab="date-tools">
+            <span class="tab-icon">📅</span>时间戳/日期
+          </button>
+          <button class="main-tab" data-main-tab="http-request">
+            <span class="tab-icon">🚀</span>HTTP 请求
+          </button>
+          <button class="main-tab" data-main-tab="file-manager">
+            <span class="tab-icon">📁</span>文件管理
+          </button>
+          <button class="main-tab" data-main-tab="word-counter">
+            <span class="tab-icon">🔢</span>字数统计
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===== Content ===== -->
+    <div class="content">
+
+      <!-- ================= 主 Tab 1: Go Struct 转换 ================= -->
+      <div id="main-tab-go-struct" class="main-panel">
+
+        <!-- 子 Header: SQL/JSON/Map tabs -->
+        <div class="sub-header">
+          <div class="tabs">
+            <button class="tab active" data-tab="sql" title="SQL">
+              <span class="short">SQL</span><span class="label">SQL</span>
+            </button>
+            <button class="tab" data-tab="json" title="JSON">
+              <span class="short">JSON</span><span class="label">JSON</span>
+            </button>
+            <button class="tab" data-tab="map" title="映射">
+              <span class="short">映射</span><span class="label">映射</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ================= SQL ================= -->
+        <section id="tab-sql" class="panel active">
+
+          <!-- Struct 名 和 Tags 一行 -->
+          <div style="display: flex; gap: 16px; align-items: start; margin-bottom: 12px;">
+            <div style="flex: 0 0 200px;">
+              <label>Struct 名</label>
+              <input id="sqlStructName" />
+            </div>
+            <div style="flex: 1;">
+              <label>Tags 选择</label>
+              <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="sql-tag-checkbox" value="json" checked />
+                  <span>json</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="sql-tag-checkbox" value="gorm" checked />
+                  <span>gorm</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="sql-tag-checkbox" value="xml" />
+                  <span>xml</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="sql-tag-checkbox" value="db" />
+                  <span>db</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="sql-tag-checkbox" value="form" />
+                  <span>form</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="sql-tag-checkbox" value="xorm" />
+                  <span>xorm</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="sql-tag-checkbox" value="mapstructure" />
+                  <span>mapstructure</span>
+                </label>
+                <button id="btnSqlCustomTags" class="secondary" style="padding: 2px 8px; font-size: 12px;">+
+                  自定义</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 左上角工具条（转换/复制） -->
+          <div class="toolbar-row">
+            <button id="btnSqlConvert">转换</button>
+            <button id="btnSqlCopy" class="secondary">复制输出</button>
+          </div>
+
+          <!-- 左输入 / 右输出 自适应 -->
+          <div class="split">
+            <div class="panel-box">
+              <div class="panel-title">SQL 输入</div>
+              <textarea id="sqlText" placeholder="CREATE TABLE ... 或 SELECT ... FROM ..."></textarea>
+            </div>
+
+            <div class="panel-box">
+              <div class="panel-title">Go Struct 输出</div>
+              <textarea id="sqlOut" readonly></textarea>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= JSON ================= -->
+        <section id="tab-json" class="panel">
+
+          <!-- Struct 名 和 Tags 一行 -->
+          <div style="display: flex; gap: 16px; align-items: start; margin-bottom: 12px;">
+            <div style="flex: 0 0 200px;">
+              <label>Struct 名</label>
+              <input id="jsonStructName" />
+            </div>
+            <div style="flex: 1;">
+              <label>Tags 选择</label>
+              <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="json-tag-checkbox" value="json" checked />
+                  <span>json</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="json-tag-checkbox" value="omitempty" />
+                  <span>omitempty</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="json-tag-checkbox" value="mapstructure" />
+                  <span>mapstructure</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="json-tag-checkbox" value="yaml" />
+                  <span>yaml</span>
+                </label>
+                <button id="btnJsonCustomTags" class="secondary" style="padding: 2px 8px; font-size: 12px;">+
+                  自定义</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="toolbar-row">
+            <button id="btnJsonConvert">转换</button>
+            <button id="btnJsonCopy" class="secondary">复制输出</button>
+          </div>
+
+          <div class="split">
+            <div class="panel-box">
+              <div class="panel-title">JSON 输入</div>
+              <textarea id="jsonText" placeholder='{"id":1,"items":[{"name":"a"}]}'></textarea>
+            </div>
+
+            <div class="panel-box">
+              <div class="panel-title">Go Struct 输出</div>
+              <textarea id="jsonOut" readonly></textarea>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= MAP ================= -->
+        <section id="tab-map" class="panel">
+          <div class="hint">
+            SQL 类型 → Go 类型映射（自动去掉长度，如 bigint(20) → bigint）
+          </div>
+
+          <div class="actions">
+            <button id="btnMapAdd">新增一行</button>
+            <button id="btnMapSave">保存</button>
+            <button id="btnMapReset" class="secondary">恢复默认</button>
+          </div>
+
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>SQL 类型</th>
+                <th>Go 类型</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="mapBody"></tbody>
+          </table>
+        </section>
+
+      </div>
+
+      <!-- ================= 主 Tab 2: JSON 格式化 ================= -->
+      <div id="main-tab-json-format" class="main-panel active">
+
+        <!-- 工具条 -->
+        <div class="toolbar-row" style="margin: 0; padding: 2px 0;"> <!-- 进一步减少留白 -->
+          <button id="btnJsonMinify">压缩</button>
+          <button id="btnJsonFormatCopy" class="secondary">复制输出</button>
+          <button id="btnJsonFormatClear" class="secondary">清空</button>
+        </div>
+
+        <!-- 左输入 / 右输出 -->
+        <div class="split" style="margin-top: 4px;"> <!-- 进一步减少留白 -->
+          <div class="panel-box">
+            <div class="panel-title">JSON 输入</div>
+            <div class="textarea-with-lines">
+              <div class="line-numbers" id="jsonFormatInputLines">1</div>
+              <textarea id="jsonFormatInput" placeholder='粘贴或输入 JSON 数据...'></textarea>
+            </div>
+          </div>
+
+          <div class="panel-box">
+            <div class="panel-title">格式化输出</div>
+            <div class="textarea-with-lines">
+              <div class="line-numbers" id="jsonFormatOutputLines">1</div>
+              <textarea id="jsonFormatOutput" readonly></textarea>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= 主 Tab 3: URL 工具 ================= -->
+      <div id="main-tab-url-tools" class="main-panel">
+
+        <!-- 工具条 -->
+        <div class="toolbar-row" style="margin-top: 12px;">
+          <button id="btnUrlEncode">编码</button>
+          <button id="btnUrlDecode">解码</button>
+          <button id="btnUrlParse">解析参数</button>
+          <button id="btnUrlCopy" class="secondary">复制结果</button>
+          <button id="btnUrlClear" class="secondary">清空</button>
+        </div>
+
+        <!-- 左右分栏 -->
+        <div class="split" style="margin-top: 12px; flex: 1; min-height: 0; display: flex; gap: 12px;">
+          <div class="panel-box" style="flex: 1; display: flex; flex-direction: column;">
+            <div class="panel-title">输入 (URL 或 文本)</div>
+            <textarea id="urlInput" placeholder="输入URL或需要编码/解码的文本..." style="flex: 1; min-height: 100px;"></textarea>
+          </div>
+
+          <div class="panel-box" style="flex: 1; display: flex; flex-direction: column;">
+            <div class="panel-title">处理结果 / 参数视图</div>
+            <div id="urlResultView"
+              style="flex: 1; display: flex; flex-direction: column; overflow: hidden; gap: 12px; min-height: 0;">
+              <div style="flex: 0 0 100px; display: flex; flex-direction: column;">
+                <textarea id="urlOutput" readonly style="height: 100%;" placeholder="处理结果将在此显示..."></textarea>
+              </div>
+
+              <!-- URL参数表格 -->
+              <div id="urlParamsSection"
+                style="flex: 1; display: none; overflow-y: auto; border-top: 1px solid #eee; padding-top: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-size: 12px; font-weight: 600; color: #555;">URL 参数详情</span>
+                  <div style="display: flex; gap: 4px;">
+                    <button id="btnAddParam" class="secondary" style="font-size: 10px; padding: 2px 6px;">+ 参数</button>
+                    <button id="btnBuildUrl" style="font-size: 10px; padding: 2px 6px;">重新构建</button>
+                  </div>
+                </div>
+                <table class="grid" id="urlParamsTable" style="margin-top: 0; font-size: 12px;">
+                  <thead>
+                    <tr>
+                      <th style="background: #fdfdfd;">Key</th>
+                      <th style="background: #fdfdfd;">Value</th>
+                      <th style="width: 30px; background: #fdfdfd;"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="urlParamsBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 主 Tab 7: HTTP 请求 ================= -->
+      <div id="main-tab-http-request" class="main-panel">
+        <div style="display: flex; flex-direction: column; height: 100%; gap: 12px;">
+
+          <!-- Request Bar -->
+          <div style="display: flex; gap: 8px; align-items: stretch;">
+            <select id="httpMethod"
+              style="width: 100px; font-weight: bold; border-radius: 8px; border: 1px solid #ddd; padding: 0 8px;">
+              <option value="GET">GET</option>
+              <option value="POST" selected>POST</option>
+              <option value="PUT">PUT</option>
+              <option value="DELETE">DELETE</option>
+              <option value="PATCH">PATCH</option>
+              <option value="HEAD">HEAD</option>
+              <option value="OPTIONS">OPTIONS</option>
+            </select>
+            <input id="httpUrl" type="text" placeholder="https://api.example.com/endpoint"
+              style="flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid #ddd; font-family: monospace;" />
+            <button id="btnSendRequest"
+              style="background: #007aff; color: white; border: none; padding: 0 24px; font-weight: 600;">发送</button>
+          </div>
+
+          <!-- Request Config Tabs -->
+          <div id="httpRequestConfig"
+            style="flex: 2.2; min-height: 0; display: flex; flex-direction: column; border: 1px solid #eee; border-radius: 12px; background: white; overflow: hidden; transition: flex 0.3s ease;">
+            <div class="sub-header"
+              style="background: #f9f9f9; padding: 4px 12px; border-bottom: 1px solid #eee; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;">
+              <div class="tabs" style="border: none;">
+                <button class="tab active" data-req-tab="params">Params</button>
+                <button class="tab" data-req-tab="headers">Headers</button>
+                <button class="tab" data-req-tab="body">Body</button>
+              </div>
+              <div class="btn-group" style="gap: 2px;">
+                <button id="btnExpandRequest" class="secondary small-btn" title="放大请求区域"
+                  style="padding: 2px 8px; font-size: 16px; line-height: 1;">▲</button>
+                <button id="btnShrinkRequest" class="secondary small-btn" title="缩小请求区域"
+                  style="padding: 2px 8px; font-size: 16px; line-height: 1;">▼</button>
+              </div>
+            </div>
+
+            <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0;">
+              <!-- Params Tab -->
+              <div id="req-tab-params" class="req-panel active"
+                style="padding: 12px; flex: 1; flex-direction: column; min-height: 0;">
+                <div
+                  style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                  <span style="font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase;">Query
+                    Parameters</span>
+                  <div class="btn-group">
+                    <button class="secondary small-btn btn-req-toggle-view" data-type="params">JSON 模式</button>
+                    <button id="btnHttpSyncUrlToParams" class="secondary small-btn" title="从 URL 解析">解析 URL</button>
+                  </div>
+                </div>
+                <div class="view-kv"
+                  style="flex: 1; overflow-y: auto; min-height: 0; border: 1px solid #f0f0f0; border-radius: 6px;">
+                  <table class="grid"
+                    style="font-size: 12px; background: #fff; margin-top: 0; border: none; box-shadow: none;">
+                    <thead>
+                      <tr>
+                        <th style="background: #f8f9fa;">Key</th>
+                        <th style="background: #f8f9fa;">Value</th>
+                        <th style="width: 30px; background: #f8f9fa;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="httpParamsBody"></tbody>
+                  </table>
+                  <button id="btnHttpAddParam" class="secondary"
+                    style="margin: 8px; width: calc(100% - 16px); border-style: dashed; font-size: 11px;">+
+                    添加参数</button>
+                </div>
+                <div class="view-json" style="display: none; flex: 1; min-height: 0;">
+                  <textarea id="httpParamsJson" placeholder='{"key": "value"}'
+                    style="height: 100%; font-family: monospace; border: 1px solid #f0f0f0;"></textarea>
+                </div>
+              </div>
+
+              <!-- Headers Tab -->
+              <div id="req-tab-headers" class="req-panel"
+                style="padding: 12px; flex: 1; flex-direction: column; min-height: 0;">
+                <div
+                  style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                  <span style="font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase;">Request
+                    Headers</span>
+                  <div class="btn-group">
+                    <button class="secondary small-btn btn-req-toggle-view" data-type="headers">JSON 模式</button>
+                  </div>
+                </div>
+                <div class="view-kv"
+                  style="flex: 1; overflow-y: auto; min-height: 0; border: 1px solid #f0f0f0; border-radius: 6px;">
+                  <table class="grid"
+                    style="font-size: 12px; background: #fff; margin-top: 0; border: none; box-shadow: none;">
+                    <thead>
+                      <tr>
+                        <th style="background: #f8f9fa;">Key</th>
+                        <th style="background: #f8f9fa;">Value</th>
+                        <th style="width: 30px; background: #f8f9fa;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="httpHeadersBody"></tbody>
+                  </table>
+                  <button id="btnHttpAddHeader" class="secondary"
+                    style="margin: 8px; width: calc(100% - 16px); border-style: dashed; font-size: 11px;">+ 添加
+                    Header</button>
+                </div>
+                <div class="view-json" style="display: none; flex: 1; min-height: 0;">
+                  <textarea id="httpHeadersJson" placeholder='{"Content-Type": "application/json"}'
+                    style="height: 100%; font-family: monospace; border: 1px solid #f0f0f0;"></textarea>
+                </div>
+              </div>
+
+              <!-- Body Tab -->
+              <div id="req-tab-body" class="req-panel"
+                style="padding: 12px; flex: 1; flex-direction: column; min-height: 0;">
+                <div
+                  style="margin-bottom: 12px; display: flex; gap: 16px; align-items: center; background: #f9f9f9; padding: 6px 12px; border-radius: 8px;">
+                  <span
+                    style="font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Body
+                    Type:</span>
+                  <div style="display: flex; gap: 12px; font-size: 12px;">
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio"
+                        name="httpBodyType" value="none" checked style="width: auto;"> none</label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio"
+                        name="httpBodyType" value="json" style="width: auto;"> json</label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio"
+                        name="httpBodyType" value="form" style="width: auto;"> form-data</label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="radio"
+                        name="httpBodyType" value="text" style="width: auto;"> text</label>
+                  </div>
+                </div>
+                <div id="httpBodyContainer" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                  <div id="httpBodyNone"
+                    style="flex: 1; display: flex; align-items: center; justify-content: center; color: #888; font-size: 13px; background: #fff; border: 1px dashed #eee; border-radius: 8px;">
+                    该请求没有 Body (No Body Content)
+                  </div>
+                  <div id="httpBodyJson" style="display: none; flex: 1;">
+                    <textarea id="httpBodyJsonText" placeholder='{"key": "value"}'
+                      style="height: 100%; font-family: monospace; border: 1px solid #eee;"></textarea>
+                  </div>
+                  <div id="httpBodyForm" style="display: none; flex: 1; flex-direction: column;">
+                    <div
+                      style="flex: 1; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 4px; background: #fff;">
+                      <table class="grid" style="font-size: 11px; margin-top: 0; box-shadow: none; border: none;">
+                        <thead>
+                          <tr>
+                            <th style="background:transparent;">Key</th>
+                            <th style="background:transparent;">Value</th>
+                            <th style="width: 30px; background:transparent;"></th>
+                          </tr>
+                        </thead>
+                        <tbody id="httpBodyFormBody"></tbody>
+                      </table>
+                      <button id="btnHttpAddForm" class="secondary"
+                        style="margin-top: 8px; width: 100%; border-style: dashed; font-size: 11px;">+ 添加 Form
+                        字段</button>
+                    </div>
+                    <div style="margin-top: 10px; border-top: 1px dashed #eee; padding-top: 10px;">
+                      <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 11px; color: #666;">从 JSON 快捷导入</span>
+                        <button id="btnHttpFormImportJson" class="secondary"
+                          style="font-size: 10px; padding: 2px 8px;">导入</button>
+                      </div>
+                      <textarea id="httpBodyFormJson" placeholder='{"key": "value"}'
+                        style="height: 50px; font-family: monospace; font-size: 11px;"></textarea>
+                    </div>
+                  </div>
+                  <div id="httpBodyText" style="display: none; flex: 1;">
+                    <textarea id="httpBodyTextValue" placeholder="输入请求体文本..."
+                      style="height: 100%; font-family: monospace; border: 1px solid #eee;"></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Response Section -->
+          <div id="httpResponseSection"
+            style="flex: 1; min-height: 0; display: flex; flex-direction: column; transition: flex 0.3s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span style="font-size: 13px; font-weight: 600; color: #333;">响应结果</span>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <div id="httpResponseStatus" style="font-size: 12px; font-weight: 600;"></div>
+                <div class="btn-group" style="gap: 2px;">
+                  <button id="btnExpandResponse" class="secondary small-btn" title="放大响应区域"
+                    style="padding: 2px 8px; font-size: 16px; line-height: 1;">▲</button>
+                  <button id="btnShrinkResponse" class="secondary small-btn" title="缩小响应区域"
+                    style="padding: 2px 8px; font-size: 16px; line-height: 1;">▼</button>
+                </div>
+              </div>
+            </div>
+            <div
+              style="flex: 1; border: 1px solid #eee; border-radius: 12px; background: #f8f9fa; overflow: hidden; display: flex; flex-direction: column;">
+              <div class="sub-header" style="background: #efefef; padding: 2px 12px; border-bottom: 1px solid #ddd;">
+                <div class="tabs" style="border: none; gap: 16px;">
+                  <button class="tab active" data-res-tab="body" style="font-size: 11px; padding: 4px 0;">Body</button>
+                  <button class="tab" data-res-tab="headers" style="font-size: 11px; padding: 4px 0;">Headers</button>
+                </div>
+              </div>
+              <div id="res-tab-body" class="res-panel active" style="flex: 1; position: relative;">
+                <textarea id="httpResBody" readonly
+                  style="position: absolute; top:0; left:0; width:100%; height:100%; background: transparent; border:none; padding: 12px; font-family: monospace;"></textarea>
+                <button id="btnHttpResCopy" class="secondary"
+                  style="position: absolute; right: 12px; top: 12px; opacity: 0.7; font-size: 11px; padding: 2px 6px;">复制</button>
+              </div>
+              <div id="res-tab-headers" class="res-panel"
+                style="flex: 1; overflow-y: auto; padding: 12px; display: none;">
+                <table class="grid" style="font-size: 11px;">
+                  <tbody id="httpResHeadersBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================= 主 Tab 4: IP 查询 ================= -->
+      <div id="main-tab-ip-query" class="main-panel" style="overflow-y: auto;">
+
+        <!-- 工具条 -->
+        <div class="toolbar-row" style="margin-top: 12px;">
+          <button id="btnGetIp">🔍 获取我的IP</button>
+          <button id="btnCopyIp" class="secondary">复制IP信息</button>
+          <button id="btnRefreshIp" class="secondary">刷新</button>
+          <button id="btnRealIp" class="secondary">获取真实IP</button>
+        </div>
+
+        <!-- IP信息显示区域 -->
+        <div style="margin-top: 20px;">
+          <div id="ipInfoContainer" style="background: #f5f5f7; border-radius: 10px; padding: 20px; min-height: 300px;">
+            <div style="text-align: center; color: #86868b; padding: 40px 0;">
+              <div style="font-size: 48px; margin-bottom: 16px;">🌐</div>
+              <div style="font-size: 14px;">点击"获取我的IP"按钮查询您的IP地址信息</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- IP详细信息表格 -->
+        <div id="ipDetailsSection" style="margin-top: 20px; display: none;">
+          <label>详细信息</label>
+          <table class="grid" id="ipDetailsTable" style="margin-top: 12px;">
+            <tbody id="ipDetailsBody">
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- ================= 主 Tab 5: 编解码/哈希 ================= -->
+      <div id="main-tab-crypto-tools" class="main-panel">
+
+        <!-- 工具条 -->
+        <div class="toolbar-row" style="margin-top: 12px; flex-wrap: wrap; gap: 8px;">
+          <!-- 编解码组 -->
+          <div style="display: flex; gap: 4px; border-right: 1px solid #eee; padding-right: 8px;">
+            <button id="btnBase64Encode">B64 编码</button>
+            <button id="btnBase64Decode">B64 解码</button>
+            <button id="btnHexEncode" class="secondary">Hex 编码</button>
+            <button id="btnHexDecode" class="secondary">Hex 解码</button>
+          </div>
+
+          <!-- Unicode/转换 -->
+          <div style="display: flex; gap: 4px; border-right: 1px solid #eee; padding-right: 8px;">
+            <button id="btnUnicodeEncode" class="secondary">Unicode 编码</button>
+            <button id="btnUnicodeDecode" class="secondary">Unicode 解码</button>
+          </div>
+
+          <!-- 哈希组 -->
+          <div style="display: flex; gap: 4px;">
+            <button id="btnMd5" class="secondary">MD5</button>
+            <button id="btnSha1" class="secondary">SHA1</button>
+            <button id="btnSha256" class="secondary">SHA256</button>
+            <button id="btnSha512" class="secondary">SHA512</button>
+          </div>
+
+          <!-- 通用 -->
+          <div style="display: flex; gap: 4px; margin-left: auto;">
+            <button id="btnCryptoCopy" class="secondary">复制结果</button>
+            <button id="btnCryptoClear" class="secondary">清空</button>
+          </div>
+        </div>
+
+        <!-- 输入区 -->
+        <div style="margin-top: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0;">
+          <div class="panel-box" style="flex: 1;">
+            <div class="panel-title">原始文本 / 待处理文本</div>
+            <textarea id="cryptoInput" placeholder="在此输入需要处理的内容..." style="flex: 1;"></textarea>
+          </div>
+        </div>
+
+        <!-- 输出区 -->
+        <div style="margin-top: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0;">
+          <div class="panel-box" style="flex: 1;">
+            <div class="panel-title">处理结果</div>
+            <textarea id="cryptoOutput" readonly placeholder="处理结果将在此显示..." style="flex: 1;"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 主 Tab 6: 时间戳/日期 ================= -->
+      <div id="main-tab-date-tools" class="main-panel">
+
+        <!-- 当前时间卡片 (增强版) -->
+        <div
+          style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0, 122, 255, 0.1); margin-top: 12px; display: grid; grid-template-columns: 1.2fr 1px 1fr 1.2fr; align-items: center; border: 1px solid rgba(0, 122, 255, 0.1);">
+          <!-- 秒级 -->
+          <div style="text-align: center;">
+            <div
+              style="font-size: 11px; color: #86868b; margin-bottom: 4px; text-transform: uppercase; font-weight: 500;">
+              秒级时间戳 (s)</div>
+            <div id="currentTimestamp"
+              style="font-size: 26px; font-weight: 700; color: #007aff; cursor: pointer; font-family: 'SF Mono', monospace;"
+              title="点击复制">0</div>
+          </div>
+          <div style="width: 1px; background: #eee; height: 40px;"></div>
+          <!-- 毫秒级 -->
+          <div style="text-align: center;">
+            <div
+              style="font-size: 11px; color: #86868b; margin-bottom: 4px; text-transform: uppercase; font-weight: 500;">
+              毫秒级时间戳 (ms)</div>
+            <div id="currentTimestampMs"
+              style="font-size: 20px; font-weight: 600; color: #007aff; cursor: pointer; font-family: 'SF Mono', monospace;"
+              title="点击复制">0</div>
+          </div>
+          <!-- 北京时间 -->
+          <div style="text-align: center; border-left: 1px solid #eee;">
+            <div
+              style="font-size: 11px; color: #86868b; margin-bottom: 4px; text-transform: uppercase; font-weight: 500;">
+              当前北京时间</div>
+            <div id="currentDateTime"
+              style="font-size: 18px; font-weight: 600; color: #1d1d1f; font-family: 'SF Mono', monospace;">---- -- --
+              --:--:--</div>
+          </div>
+        </div>
+
+        <!-- 功能区：网格布局 -->
+        <div
+          style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; height: 100%; overflow-y: auto; padding-bottom: 20px;">
+
+          <!-- 1. 基础转换 -->
+          <div class="panel-box"
+            style="background: white; padding: 12px; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.1);">
+            <div class="panel-title" style="margin-bottom: 8px; font-weight: 600; font-size: 13px;">时间戳 ⇌ 日期</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; gap: 8px; align-items: flex-end;">
+                <div style="flex: 1;">
+                  <label style="font-size: 11px;">时间戳 (s/ms)</label>
+                  <input id="tsInput" placeholder="输入10位或13位时间戳" style="font-size: 12px; padding: 6px 10px;" />
+                </div>
+                <button id="btnTsToDate" class="secondary" style="padding: 6px 12px;">转换 ↓</button>
+              </div>
+              <div>
+                <label style="font-size: 11px;">北京时间</label>
+                <div style="display: flex; gap: 6px;">
+                  <input id="dateOutput" readonly style="font-size: 12px; padding: 6px 10px; flex: 1;" />
+                  <button id="btnCopyDateOut" class="secondary" style="padding: 6px 10px;">📎</button>
+                </div>
+              </div>
+              <div style="border-top: 1px dashed #eee; margin: 4px 0;"></div>
+              <div style="display: flex; gap: 8px; align-items: flex-end;">
+                <div style="flex: 1;">
+                  <label style="font-size: 11px;">日期字符串</label>
+                  <input id="dateInput" placeholder="YYYY-MM-DD HH:mm:ss" style="font-size: 12px; padding: 6px 10px;" />
+                </div>
+                <button id="btnDateToTs" class="secondary" style="padding: 6px 12px;">转换 ↓</button>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div>
+                  <label style="font-size: 11px;">秒 (10位)</label>
+                  <input id="tsOutputSec" readonly style="font-size: 12px; padding: 6px 10px;" />
+                </div>
+                <div>
+                  <label style="font-size: 11px;">毫秒 (13位)</label>
+                  <input id="tsOutputMs" readonly style="font-size: 12px; padding: 6px 10px;" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 日期计算 -->
+          <div class="panel-box"
+            style="background: white; padding: 12px; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.1);">
+            <div class="panel-title" style="margin-bottom: 8px; font-weight: 600; font-size: 13px;">日期加减计算</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div>
+                <label style="font-size: 11px;">基准日期</label>
+                <div style="display: flex; gap: 6px;">
+                  <input id="arithBaseDate" placeholder="默认当前时间" style="font-size: 12px; padding: 6px 10px; flex: 1;" />
+                  <button id="btnArithNow" class="secondary" style="padding: 6px 10px;">当前</button>
+                </div>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: flex-end;">
+                <div style="flex: 1;">
+                  <label style="font-size: 11px;">偏移量 (正加负减)</label>
+                  <div style="display: flex; gap: 4px;">
+                    <input id="arithValue" type="number" value="1"
+                      style="width: 50px; font-size: 12px; padding: 6px 4px; text-align: center;" />
+                    <select id="arithUnit" style="flex: 1; font-size: 12px; padding: 6px 4px;">
+                      <option value="days">天 (Days)</option>
+                      <option value="hours">小时 (Hours)</option>
+                      <option value="minutes">分钟 (Minutes)</option>
+                      <option value="months">月 (Months)</option>
+                      <option value="years">年 (Years)</option>
+                    </select>
+                  </div>
+                </div>
+                <button id="btnArithCalc" style="padding: 6px 12px;">计算</button>
+              </div>
+              <div>
+                <label style="font-size: 11px;">计算结果</label>
+                <div style="display: flex; gap: 6px;">
+                  <input id="arithResult" readonly style="font-size: 12px; padding: 6px 10px; flex: 1;" />
+                  <button id="btnCopyArith" class="secondary" style="padding: 6px 10px;">📎</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. 时间间隔计算 -->
+          <div class="panel-box"
+            style="background: white; padding: 12px; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.1);">
+            <div class="panel-title" style="margin-bottom: 8px; font-weight: 600; font-size: 13px;">日期间隔查询</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div>
+                  <label style="font-size: 11px;">开始时间</label>
+                  <input id="diffStart" placeholder="YYYY-MM-DD" style="font-size: 12px; padding: 6px 10px;" />
+                </div>
+                <div>
+                  <label style="font-size: 11px;">结束时间</label>
+                  <input id="diffEnd" placeholder="默认当前" style="font-size: 12px; padding: 6px 10px;" />
+                </div>
+              </div>
+              <button id="btnCalcDiff" style="padding: 6px 12px; margin-top: 4px;">计算间隔</button>
+              <div id="diffResult"
+                style="font-size: 12px; color: #555; background: #f9f9f9; padding: 8px; border-radius: 6px; line-height: 1.5; min-height: 50px; display: flex; align-items: center; justify-content: center; text-align: center;">
+                输入两个日期以计算间隔
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. 其它开发辅助 -->
+          <div class="panel-box"
+            style="background: white; padding: 12px; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.1);">
+            <div class="panel-title" style="margin-bottom: 8px; font-weight: 600; font-size: 13px;">开发常用速查</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; color: #666;">
+              <div style="background: #f5f5f7; padding: 6px; border-radius: 6px;">
+                <b>1 分钟:</b> 60 s
+              </div>
+              <div style="background: #f5f5f7; padding: 6px; border-radius: 6px;">
+                <b>1 小时:</b> 3,600 s
+              </div>
+              <div style="background: #f5f5f7; padding: 6px; border-radius: 6px;">
+                <b>1 天:</b> 86,400 s
+              </div>
+              <div style="background: #f5f5f7; padding: 6px; border-radius: 6px;">
+                <b>1 周:</b> 604,800 s
+              </div>
+              <div style="background: #f5f5f7; padding: 6px; border-radius: 6px;">
+                <b>1 月 (30d):</b> 2,592,000 s
+              </div>
+              <div style="background: #f5f5f7; padding: 6px; border-radius: 6px;">
+                <b>1 年 (365d):</b> 31,536,000 s
+              </div>
+            </div>
+            <div style="display: flex; gap: 4px; margin-top: 8px;">
+              <button class="secondary" style="font-size: 10px; padding: 4px 8px; flex: 1;"
+                onclick="document.getElementById('tsInput').value='0'; document.getElementById('btnTsToDate').click();">Unix
+                元年</button>
+              <button class="secondary" style="font-size: 10px; padding: 4px 8px; flex: 1;"
+                onclick="document.getElementById('tsInput').value='2147483647'; document.getElementById('btnTsToDate').click();">2038
+                问题</button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ================= 主 Tab 8: 文件管理 ================= -->
+      <div id="main-tab-file-manager" class="main-panel">
+
+        <!-- 工具条 -->
+        <div class="toolbar-row" style="margin: 0; flex-shrink: 0;">
+          <button id="btnSelectFiles">📂 选择文件</button>
+          <button id="btnMergeToTxt" class="secondary">合并为 TXT</button>
+          <button id="btnMergeToWord" class="secondary">合并为 Word</button>
+          <button id="btnClearFiles" class="secondary">清空列表</button>
+        </div>
+
+        <!-- 上半部分：上传区域 + 文件列表（左右布局，占50%高度） -->
+        <div style="flex: 1; min-height: 0; display: flex; gap: 12px;">
+
+          <!-- 左侧：文件上传区域 -->
+          <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+            <div id="fileDropZone"
+              style="flex: 1; border: 2px dashed #007aff; border-radius: 12px; padding: 24px; text-align: center; background: #f5f7fa; cursor: pointer; transition: all 0.3s; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+              <div style="font-size: 48px; margin-bottom: 12px;">📄</div>
+              <div style="font-size: 16px; font-weight: 600; color: #1d1d1f; margin-bottom: 8px;">
+                拖拽文件到此处，或点击选择文件
+              </div>
+              <div style="font-size: 13px; color: #86868b;">
+                支持 Word (.doc/.docx)、文本 (.txt)、Markdown (.md)、HTML (.html/.htm) 等格式
+              </div>
+            </div>
+            <input type="file" id="fileInput" accept=".doc,.docx,.txt,.md,.markdown,.html,.htm" multiple
+              style="display: none;" />
+          </div>
+
+          <!-- 右侧：已选文件列表 -->
+          <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0;">
+              <label style="font-weight: 600; font-size: 14px;">已选文件 (<span id="fileCount">0</span>)</label>
+            </div>
+
+            <!-- 分隔符设置 -->
+            <div style="background: #f5f7fa; border-radius: 8px; padding: 10px; margin-bottom: 8px; flex-shrink: 0;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <label style="font-size: 12px; font-weight: 600; color: #1d1d1f;">分隔符：</label>
+
+                <label style="font-size: 11px; color: #666; display: flex; align-items: center;">
+                  <input type="radio" name="separatorType" value="newline" checked
+                    style="width: auto; margin-right: 3px;" />
+                  单行
+                </label>
+
+                <label style="font-size: 11px; color: #666; display: flex; align-items: center;">
+                  <input type="radio" name="separatorType" value="double-newline"
+                    style="width: auto; margin-right: 3px;" />
+                  双行
+                </label>
+
+                <label style="font-size: 11px; color: #666; display: flex; align-items: center;">
+                  <input type="radio" name="separatorType" value="line" style="width: auto; margin-right: 3px;" />
+                  分隔线
+                </label>
+
+                <label style="font-size: 11px; color: #666; display: flex; align-items: center;">
+                  <input type="radio" name="separatorType" value="stars" style="width: auto; margin-right: 3px;" />
+                  星号
+                </label>
+
+                <label style="font-size: 11px; color: #666; display: flex; align-items: center;">
+                  <input type="radio" name="separatorType" value="custom" style="width: auto; margin-right: 3px;" />
+                  自定义
+                </label>
+
+                <input type="text" id="customSeparator" placeholder="输入自定义分隔符"
+                  style="flex: 1; min-width: 100px; max-width: 200px; padding: 4px 8px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 11px; display: none;" />
+              </div>
+            </div>
+
+            <!-- 文件列表 -->
+            <div id="fileListContainer"
+              style="flex: 1; border: 1px solid #e0e0e0; border-radius: 8px; background: white; overflow-y: auto; min-height: 0;">
+              <div id="fileList" style="padding: 12px;">
+                <div style="text-align: center; color: #86868b; padding: 40px 20px;">
+                  <div style="font-size: 32px; margin-bottom: 12px;">📋</div>
+                  <div style="font-size: 14px;">暂无文件，请选择或拖拽文件</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 下半部分：合并预览区域（占50%高度） -->
+        <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+          <div class="panel-box" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+            <div class="panel-title" style="flex-shrink: 0;">合并预览 / 内容输出</div>
+            <textarea id="mergedContent" readonly placeholder="合并后的内容将在此显示..."
+              style="flex: 1; min-height: 0; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 1.6; resize: none;"></textarea>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= 主 Tab 9: 字数统计 ================= -->
+      <div id="main-tab-word-counter" class="main-panel">
+
+        <!-- 工具条 -->
+        <div class="toolbar-row" style="margin: 0; flex-shrink: 0;">
+          <button id="btnWcClear" class="secondary">🗑️ 清空</button>
+          <button id="btnWcCopy" class="secondary">📋 复制内容</button>
+          <span style="font-size: 12px; color: #86868b; margin-left: 4px;">输入文本后实时统计</span>
+        </div>
+
+        <!-- 上下布局：输入区 + 统计结果 -->
+        <div style="display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px;">
+
+          <!-- 输入区（占40%高度） -->
+          <div style="flex: 2; min-height: 0; display: flex; flex-direction: column;">
+            <div class="panel-title" style="flex-shrink: 0; margin-bottom: 6px;">输入文本</div>
+            <textarea id="wcInput" placeholder="在此粘贴或输入任意文本，统计结果将实时显示在下方……"></textarea>
+          </div>
+
+          <!-- 统计结果区（占60%高度） -->
+          <div style="flex: 3; min-height: 0; display: flex; flex-direction: column;">
+            <div class="panel-title" style="flex-shrink: 0; margin-bottom: 6px;">统计结果</div>
+
+            <!-- 空状态占位 -->
+            <div id="wcPlaceholder">
+              <div style="font-size: 48px;">📊</div>
+              <div style="font-size: 14px;">请在上方输入文本</div>
+              <div style="font-size: 12px;">支持中英文混合统计</div>
+            </div>
+
+            <!-- 统计卡片容器 -->
+            <div id="wcStatsContainer" style="display: none; flex: 1; min-height: 0; overflow: hidden;">
+              <div id="wcStatsGrid" class="wc-stats-grid"></div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <footer id="msg" class="msg"></footer>
+
+    <!-- Custom Tags Modal -->
+    <div id="customTagsModal"
+      style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+      <div
+        style="background: white; border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+        <h3 style="margin: 0 0 16px 0; font-size: 18px;">自定义 Tags</h3>
+        <p style="margin: 0 0 12px 0; font-size: 13px; color: #666;">
+          输入自定义tag名称，多个用空格或逗号分隔。例如：validate binding description
+        </p>
+        <textarea id="customTagsInput" placeholder="validate binding description"
+          style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; resize: vertical;"></textarea>
+        <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end;">
+          <button id="btnCancelCustomTags" class="secondary">取消</button>
+          <button id="btnSaveCustomTags">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="converter.js"></script>
+    <script src="json-optimizer.js"></script>
+    <script src="custom-tags-modal.js"></script>
+    <script src="popup.js"></script>
+    <script src="url-tools.js"></script>
+    <script src="ip-query.js"></script>
+    <script src="crypto-tools.js"></script>
+    <script src="date-tools.js"></script>
+    <script src="http-request.js"></script>
+    <script src="inflate.js"></script>
+    <script src="docx-parser.js"></script>
+    <script src="file-manager.js"></script>
+    <script src="word-counter.js"></script>
+</body>
+
+</html>

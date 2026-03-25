@@ -24,24 +24,17 @@
     .app {
       height: 100vh;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       overflow: hidden;
     }
 
-    header {
-      position: sticky;
-      top: 0;
-      background: #fff;
-      z-index: 10;
-      border-bottom: 1px solid #eee;
-      padding: 4px 8px 2px;
-      /* 减少 tab 栏留白 */
-    }
+
 
     /* 主体区域：剩余空间全部给 content */
     .content {
       flex: 1;
       min-height: 0;
+      min-width: 0;
       /* 关键：允许内部滚动/伸缩 */
       padding: 0;
       display: flex;
@@ -249,13 +242,7 @@
       pointer-events: none;
     }
 
-    /* Tab 图标样式 */
-    .main-tab .tab-icon {
-      font-size: 16px;
-      margin-right: 6px;
-      display: inline-block;
-      vertical-align: middle;
-    }
+    /* Tab 图标样式 - handled by styles.css sidebar */
 
     /* 自定义滚动条样式 - 更细更美观 */
     .textarea-with-lines textarea::-webkit-scrollbar {
@@ -459,41 +446,43 @@
 <body>
   <div class="app">
 
-    <!-- ===== Header ===== -->
-    <header>
-      <div style="padding: 0px 12px 6px;">
-        <!-- 主 Tabs -->
-        <div class="main-tabs">
-          <button class="main-tab" data-main-tab="go-struct">
-            <span class="tab-icon">⚙️</span>Go Struct 转换
-          </button>
-          <button class="main-tab active" data-main-tab="json-format">
-            <span class="tab-icon">📋</span>JSON 格式化
-          </button>
-          <button class="main-tab" data-main-tab="url-tools">
-            <span class="tab-icon">🔗</span>URL 工具
-          </button>
-          <button class="main-tab" data-main-tab="ip-query">
-            <span class="tab-icon">🌐</span>IP 查询
-          </button>
-          <button class="main-tab" data-main-tab="crypto-tools">
-            <span class="tab-icon">🔐</span>编解码/哈希
-          </button>
-          <button class="main-tab" data-main-tab="date-tools">
-            <span class="tab-icon">📅</span>时间戳/日期
-          </button>
-          <button class="main-tab" data-main-tab="http-request">
-            <span class="tab-icon">🚀</span>HTTP 请求
-          </button>
-          <button class="main-tab" data-main-tab="file-manager">
-            <span class="tab-icon">📁</span>文件管理
-          </button>
-          <button class="main-tab" data-main-tab="word-counter">
-            <span class="tab-icon">🔢</span>字数统计
-          </button>
-        </div>
+    <!-- ===== Sidebar ===== -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-logo">🧰</span>
+        <span class="sidebar-title">工具箱</span>
+        <button class="sidebar-toggle-btn" id="sidebarToggle" title="收起/展开侧栏">◀</button>
       </div>
-    </header>
+      <div class="main-tabs">
+        <button class="main-tab" data-main-tab="go-struct" data-tooltip="Go Struct 转换">
+          <span class="tab-icon">⚙️</span><span class="tab-label">Go Struct</span>
+        </button>
+        <button class="main-tab active" data-main-tab="json-format" data-tooltip="JSON 格式化">
+          <span class="tab-icon">📋</span><span class="tab-label">JSON 格式化</span>
+        </button>
+        <button class="main-tab" data-main-tab="url-tools" data-tooltip="URL 工具">
+          <span class="tab-icon">🔗</span><span class="tab-label">URL 工具</span>
+        </button>
+        <button class="main-tab" data-main-tab="ip-query" data-tooltip="IP 查询">
+          <span class="tab-icon">🌐</span><span class="tab-label">IP 查询</span>
+        </button>
+        <button class="main-tab" data-main-tab="crypto-tools" data-tooltip="编解码/哈希">
+          <span class="tab-icon">🔐</span><span class="tab-label">编解码/哈希</span>
+        </button>
+        <button class="main-tab" data-main-tab="date-tools" data-tooltip="时间戳/日期">
+          <span class="tab-icon">📅</span><span class="tab-label">时间戳/日期</span>
+        </button>
+        <button class="main-tab" data-main-tab="http-request" data-tooltip="HTTP 请求">
+          <span class="tab-icon">🚀</span><span class="tab-label">HTTP 请求</span>
+        </button>
+        <button class="main-tab" data-main-tab="file-manager" data-tooltip="文件管理">
+          <span class="tab-icon">📁</span><span class="tab-label">文件管理</span>
+        </button>
+        <button class="main-tab" data-main-tab="word-counter" data-tooltip="字数统计">
+          <span class="tab-icon">🔢</span><span class="tab-label">字数统计</span>
+        </button>
+      </div>
+    </nav>
 
     <!-- ===== Content ===== -->
     <div class="content">
@@ -1397,6 +1386,8 @@
     <script src="docx-parser.js"></script>
     <script src="file-manager.js"></script>
     <script src="word-counter.js"></script>
+
+    <script src="sidebar.js"></script>
 </body>
 
 </html>

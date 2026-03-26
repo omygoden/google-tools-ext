@@ -516,6 +516,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   /* ===== JSON Formatter Buttons ===== */
   $("btnJsonFormat")?.addEventListener("click", () => handleJsonFormat(false));
   $("btnJsonMinify")?.addEventListener("click", handleJsonMinify);
+  $("btnJsonToYaml")?.addEventListener("click", handleJsonToYaml);
   $("btnJsonFormatCopy")?.addEventListener("click", async () => {
     await copyText($("jsonFormatOutput")?.value || "");
     setMsg("已复制格式化输出");
@@ -806,6 +807,202 @@ async function handleJsonMinify() {
     // Update line numbers
     updateLineNumbers(output, $("jsonFormatOutputLines"));
     setMsg("JSON 已压缩");
+  } catch (e) {
+    setMsg(`JSON 格式错误: ${e?.message || e}`, true);
+  }
+}
+
+/* ===== YAML Key Name Transform Helpers ===== */
+function yamlKeyToSnakeCase(key) {
+  // Split on existing separators or camelCase boundaries
+  // e.g. "userName" -> "user_name", "HTTPStatus" -> "http_status", "already_snake" -> "already_snake"
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')   // camelCase boundary
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2') // consecutive capitals
+    .replace(/[-\s]+/g, '_')                    // spaces/dashes to underscore
+    .toLowerCase();
+}
+
+function yamlKeyToPascalCase(key) {
+  // Split on underscores, dashes, spaces, or camelCase boundaries, then PascalCase join
+  // e.g. "user_name" -> "UserName", "userId" -> "UserId", "http_status_code" -> "HttpStatusCode"
+  return key
+    .replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
+    .replace(/^(.)/, (_, c) => c.toUpperCase());
+}
+
+function getYamlKeyTransform(style) {
+  if (style === 'snake_case') return yamlKeyToSnakeCase;
+  if (style === 'camelCase') return yamlKeyToPascalCase;
+  return (k) => k; // original
+}
+
+/* ===== JSON to YAML Conversion ===== */
+function jsonToYaml(value, indent = 0, keyTransform = null) {
+  const prefix = '  '.repeat(indent);
+  const transformKey = keyTransform || ((k) => k);
+
+  if (value === null || value === undefined) {
+    return 'null';
+  }
+
+  if (typeof value === 'boolean') {
+    return value.toString();
+  }
+
+  if (typeof value === 'number') {
+    return value.toString();
+  }
+
+  if (typeof value === 'string') {
+    // Check if string needs quoting
+    if (
+      value === '' ||
+      value === 'true' || value === 'false' ||
+      value === 'null' || value === 'yes' || value === 'no' ||
+      value === 'on' || value === 'off' ||
+      /^[\d.eE+-]+$/.test(value) ||
+      value.includes(': ') || value.includes('#') ||
+      value.startsWith('- ') || value.startsWith('? ') ||
+      value.startsWith('{') || value.startsWith('[') ||
+      value.startsWith('"') || value.startsWith("'") ||
+      value.startsWith('&') || value.startsWith('*') ||
+      value.includes('\n')
+    ) {
+      // Use double-quoted style, escape special chars
+      const escaped = value
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t');
+      return `"${escaped}"`;
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+
+    const lines = [];
+    for (const item of value) {
+      if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+        // Object items: first key on same line as dash
+        const keys = Object.keys(item);
+        if (keys.length === 0) {
+          lines.push(`${prefix}- {}`);
+        } else {
+          const firstKey = transformKey(keys[0]);
+          const firstVal = jsonToYaml(item[keys[0]], indent + 2, keyTransform);
+          if (isSimpleValue(item[keys[0]])) {
+            lines.push(`${prefix}- ${firstKey}: ${firstVal}`);
+          } else {
+            lines.push(`${prefix}- ${firstKey}:`);
+            lines.push(firstVal);
+          }
+          // Remaining keys
+          for (let i = 1; i < keys.length; i++) {
+            const k = transformKey(keys[i]);
+            const v = jsonToYaml(item[keys[i]], indent + 2, keyTransform);
+            if (isSimpleValue(item[keys[i]])) {
+              lines.push(`${prefix}  ${k}: ${v}`);
+            } else {
+              lines.push(`${prefix}  ${k}:`);
+              lines.push(v);
+            }
+          }
+        }
+      } else if (Array.isArray(item)) {
+        // Nested array
+        lines.push(`${prefix}-`);
+        lines.push(jsonToYaml(item, indent + 1, keyTransform));
+      } else {
+        // Simple value item
+        lines.push(`${prefix}- ${jsonToYaml(item, indent + 1, keyTransform)}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (keys.length === 0) return '{}';
+
+    const lines = [];
+    for (const key of keys) {
+      const transformedKey = transformKey(key);
+      const val = value[key];
+      const yamlVal = jsonToYaml(val, indent + 1, keyTransform);
+
+      if (isSimpleValue(val)) {
+        lines.push(`${prefix}${transformedKey}: ${yamlVal}`);
+      } else {
+        lines.push(`${prefix}${transformedKey}:`);
+        lines.push(yamlVal);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  return String(value);
+}
+
+function isSimpleValue(value) {
+  return value === null || value === undefined ||
+    typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+function handleJsonToYaml() {
+  try {
+    const output = $("jsonFormatOutput");
+    if (!output) return;
+
+    let input = ($("jsonFormatInput")?.value || "").trim();
+    if (!input) {
+      setMsg("请输入 JSON 数据", true);
+      return;
+    }
+
+    // Sanitize
+    input = input.replace(/^\uFEFF/, '');
+    input = input.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+    // Try unescaping
+    if (input.includes('\\"')) {
+      try {
+        let unescaped = input.replace(/\\"/g, '"').replace(/\\"/g, '"');
+        JSON.parse(unescaped);
+        input = unescaped;
+      } catch (e) { /* keep original */ }
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(input);
+    } catch (e) {
+      // Try as escaped string
+      if (input.startsWith('"') && input.endsWith('"')) {
+        const unescaped = JSON.parse(input);
+        parsed = JSON.parse(unescaped);
+      } else {
+        throw e;
+      }
+    }
+
+    const keyStyle = $("yamlKeyStyle")?.value || 'original';
+    const keyTransform = getYamlKeyTransform(keyStyle);
+    const yaml = jsonToYaml(parsed, 0, keyTransform);
+
+    // Remove clickable wrapper if exists
+    const wrapper = output.nextElementSibling;
+    if (wrapper && wrapper.classList.contains('json-clickable-wrapper')) {
+      wrapper.remove();
+    }
+    output.style.display = '';
+    output.style.color = '';
+    output.value = yaml;
+    updateLineNumbers(output, $("jsonFormatOutputLines"));
+    setMsg("已转换为 YAML 格式");
   } catch (e) {
     setMsg(`JSON 格式错误: ${e?.message || e}`, true);
   }

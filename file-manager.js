@@ -98,7 +98,7 @@ function initFileManager() {
 function handleFiles(files) {
     if (!files || files.length === 0) return;
 
-    const supportedExtensions = ['.doc', '.docx', '.txt', '.md', '.markdown', '.html', '.htm'];
+    const supportedExtensions = ['.doc', '.docx', '.txt', '.md', '.markdown', '.html', '.htm', '.pdf'];
 
     const validFiles = Array.from(files).filter(file => {
         const fileName = file.name.toLowerCase();
@@ -106,7 +106,7 @@ function handleFiles(files) {
     });
 
     if (validFiles.length === 0) {
-        setMsg('请选择支持的文件格式 (Word、TXT、Markdown、HTML)', true);
+        setMsg('请选择支持的文件格式 (Word、PDF、TXT、Markdown、HTML)', true);
         return;
     }
 
@@ -131,6 +131,7 @@ function getFileIcon(fileName) {
     if (name.endsWith('.txt')) return '📝';
     if (name.endsWith('.md') || name.endsWith('.markdown')) return '📋';
     if (name.endsWith('.html') || name.endsWith('.htm')) return '🌐';
+    if (name.endsWith('.pdf')) return '📕';
     return '📄';
 }
 
@@ -215,6 +216,11 @@ async function readFileContent(file) {
         return readWordDocument(file);
     }
 
+    // For PDF documents
+    if (fileName.endsWith('.pdf')) {
+        return readPdfDocument(file);
+    }
+
     // Fallback for unsupported files
     return Promise.resolve(`[不支持的文件格式: ${file.name}]`);
 }
@@ -293,6 +299,67 @@ async function extractTextFromDocx(arrayBuffer, filename) {
         }
 
         return `[无法从 ${filename} 提取文本内容]\n建议：请确保文件是有效的 .docx 格式`;
+    } catch (error) {
+        return `[解析 ${filename} 时出错: ${error.message}]`;
+    }
+}
+
+// Read PDF document content
+async function readPdfDocument(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = async function (e) {
+            try {
+                const arrayBuffer = e.target.result;
+                const text = await extractTextFromPdf(arrayBuffer, file.name);
+                resolve(text);
+            } catch (error) {
+                reject(error);
+            }
+        };
+
+        reader.onerror = () => reject(new Error('文件读取失败'));
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+// PDF text extraction using pdf.js
+async function extractTextFromPdf(arrayBuffer, filename) {
+    try {
+        if (typeof window.pdfjsLib === 'undefined') {
+            return `[无法提取 ${filename} 的内容：未加载 PDF 解析库]`;
+        }
+
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+
+        const loadingTask = window.pdfjsLib.getDocument(new Uint8Array(arrayBuffer));
+        const pdf = await loadingTask.promise;
+        let text = '';
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+
+            // Reconstruct text preserving some visual spacing
+            let lastY = -1;
+            let pageText = '';
+
+            for (const item of textContent.items) {
+                if (lastY !== -1 && Math.abs(item.transform[5] - lastY) > Number.EPSILON) {
+                    pageText += '\n'; // New line if Y coordinate changed
+                }
+                pageText += item.str;
+                if (item.hasEOL) {
+                    pageText += '\n';
+                }
+                lastY = item.transform[5];
+            }
+
+            text += pageText + '\n\n';
+        }
+
+        return text.trim() || `[文件 ${filename} 内容为空或无法解析]`;
     } catch (error) {
         return `[解析 ${filename} 时出错: ${error.message}]`;
     }
@@ -598,11 +665,27 @@ async function createZipBlob(files) {
     const centralDirectory = [];
     let offset = 0;
 
+    // CRC-32 cache table
+    const crcTable = new Uint32Array(256);
+    for (let c = 0, n = 0; n < 256; ++n) {
+        c = n;
+        for (let k = 0; k < 8; ++k) {
+            c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        }
+        crcTable[n] = c;
+    }
+
     const fileEntries = Object.entries(files);
 
     for (const [path, content] of fileEntries) {
         const contentBytes = new TextEncoder().encode(content);
         const pathBytes = new TextEncoder().encode(path);
+
+        let crc = -1;
+        for (let i = 0, len = contentBytes.length; i < len; ++i) {
+            crc = (crc >>> 8) ^ crcTable[(crc ^ contentBytes[i]) & 0xff];
+        }
+        crc = (crc ^ -1) >>> 0;
 
         // Local file header
         const localHeader = new Uint8Array(30 + pathBytes.length);
@@ -621,7 +704,7 @@ async function createZipBlob(files) {
         // File last modification date
         view.setUint16(12, 0, true);
         // CRC-32
-        view.setUint32(14, 0, true);
+        view.setUint32(14, crc, true);
         // Compressed size
         view.setUint32(18, contentBytes.length, true);
         // Uncompressed size
@@ -656,7 +739,7 @@ async function createZipBlob(files) {
         // File last modification date
         centralView.setUint16(14, 0, true);
         // CRC-32
-        centralView.setUint32(16, 0, true);
+        centralView.setUint32(16, crc, true);
         // Compressed size
         centralView.setUint32(20, contentBytes.length, true);
         // Uncompressed size

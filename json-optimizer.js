@@ -203,7 +203,7 @@ function addLineActions(line, value, lineId) {
 function renderJsonNodeOptimized(value, container, key, indent, isLast = true) {
     const line = document.createElement('div');
     line.className = 'json-line';
-    line.style.paddingLeft = (indent * 20) + 'px';
+    line.style.paddingLeft = (indent * 36) + 'px';
 
     if (Array.isArray(value)) {
         renderArrayNode(value, line, container, key, indent, isLast);
@@ -246,7 +246,7 @@ function renderArrayNode(value, line, container, key, indent, isLast) {
 
     const bracket = document.createElement('span');
     bracket.className = 'json-bracket';
-    bracket.textContent = '[';
+    bracket.textContent = hasItems ? '[' : '[]' + (isLast ? '' : ',');
     line.appendChild(bracket);
 
     if (hasItems) {
@@ -274,12 +274,14 @@ function renderArrayNode(value, line, container, key, indent, isLast) {
         }
     });
 
-    const closeLine = document.createElement('div');
-    closeLine.className = 'json-line';
-    closeLine.dataset.parentId = lineId;
-    closeLine.style.paddingLeft = (indent * 20) + 'px';
-    closeLine.textContent = ']' + (isLast ? '' : ',');
-    container.appendChild(closeLine);
+    if (hasItems) {
+        const closeLine = document.createElement('div');
+        closeLine.className = 'json-line';
+        closeLine.dataset.parentId = lineId;
+        closeLine.style.paddingLeft = (indent * 36) + 'px';
+        closeLine.textContent = ']' + (isLast ? '' : ',');
+        container.appendChild(closeLine);
+    }
 
     return line;
 }
@@ -317,7 +319,7 @@ function renderObjectNode(value, line, container, key, indent, isLast) {
 
     const brace = document.createElement('span');
     brace.className = 'json-brace';
-    brace.textContent = '{';
+    brace.textContent = hasKeys ? '{' : '{}' + (isLast ? '' : ',');
     line.appendChild(brace);
 
     if (hasKeys) {
@@ -345,12 +347,14 @@ function renderObjectNode(value, line, container, key, indent, isLast) {
         }
     });
 
-    const closeLine = document.createElement('div');
-    closeLine.className = 'json-line';
-    closeLine.dataset.parentId = lineId;
-    closeLine.style.paddingLeft = (indent * 20) + 'px';
-    closeLine.textContent = '}' + (isLast ? '' : ',');
-    container.appendChild(closeLine);
+    if (hasKeys) {
+        const closeLine = document.createElement('div');
+        closeLine.className = 'json-line';
+        closeLine.dataset.parentId = lineId;
+        closeLine.style.paddingLeft = (indent * 36) + 'px';
+        closeLine.textContent = '}' + (isLast ? '' : ',');
+        container.appendChild(closeLine);
+    }
 
     return line;
 }

@@ -1140,7 +1140,7 @@ function renderJsonNode(value, container, key, indent, isLast = true) {
   line.className = 'json-line';
 
   // Set indentation using CSS padding
-  line.style.paddingLeft = (indent * 20) + 'px';
+  line.style.paddingLeft = (indent * 36) + 'px';
 
   if (Array.isArray(value)) {
     // Array
@@ -1275,7 +1275,7 @@ function renderJsonNode(value, container, key, indent, isLast = true) {
     // Opening bracket
     const bracket = document.createElement('span');
     bracket.className = 'json-bracket';
-    bracket.textContent = '[';
+    bracket.textContent = hasItems ? '[' : '[]' + (isLast ? '' : ',');
     line.appendChild(bracket);
 
     // Count badge
@@ -1379,18 +1379,20 @@ function renderJsonNode(value, container, key, indent, isLast = true) {
     line.dataset.id = lineId;
 
     // Array items
-    value.forEach((item, index) => {
-      const childLine = renderJsonNode(item, container, '', indent + 1, index === value.length - 1);
-      if (childLine) childLine.dataset.parentId = lineId;
-    });
+    if (hasItems) {
+      value.forEach((item, index) => {
+        const childLine = renderJsonNode(item, container, '', indent + 1, index === value.length - 1);
+        if (childLine) childLine.dataset.parentId = lineId;
+      });
 
-    // Closing bracket
-    const closeLine = document.createElement('div');
-    closeLine.className = 'json-line';
-    closeLine.dataset.parentId = lineId;
-    closeLine.style.paddingLeft = (indent * 20) + 'px';
-    closeLine.textContent = ']' + (isLast ? '' : ',');
-    container.appendChild(closeLine);
+      // Closing bracket
+      const closeLine = document.createElement('div');
+      closeLine.className = 'json-line';
+      closeLine.dataset.parentId = lineId;
+      closeLine.style.paddingLeft = (indent * 36) + 'px';
+      closeLine.textContent = ']' + (isLast ? '' : ',');
+      container.appendChild(closeLine);
+    }
 
     return line;
 
@@ -1524,7 +1526,7 @@ function renderJsonNode(value, container, key, indent, isLast = true) {
     // Opening brace
     const brace = document.createElement('span');
     brace.className = 'json-brace';
-    brace.textContent = '{';
+    brace.textContent = hasKeys ? '{' : '{}' + (isLast ? '' : ',');
     line.appendChild(brace);
 
     // Count badge
@@ -1628,18 +1630,20 @@ function renderJsonNode(value, container, key, indent, isLast = true) {
     line.dataset.id = lineId;
 
     // Object properties
-    keys.forEach((k, index) => {
-      const childLine = renderJsonNode(value[k], container, k, indent + 1, index === keys.length - 1);
-      if (childLine) childLine.dataset.parentId = lineId;
-    });
+    if (hasKeys) {
+      keys.forEach((k, index) => {
+        const childLine = renderJsonNode(value[k], container, k, indent + 1, index === keys.length - 1);
+        if (childLine) childLine.dataset.parentId = lineId;
+      });
 
-    // Closing brace
-    const closeLine = document.createElement('div');
-    closeLine.className = 'json-line';
-    closeLine.dataset.parentId = lineId;
-    closeLine.style.paddingLeft = (indent * 20) + 'px';
-    closeLine.textContent = '}' + (isLast ? '' : ',');
-    container.appendChild(closeLine);
+      // Closing brace
+      const closeLine = document.createElement('div');
+      closeLine.className = 'json-line';
+      closeLine.dataset.parentId = lineId;
+      closeLine.style.paddingLeft = (indent * 36) + 'px';
+      closeLine.textContent = '}' + (isLast ? '' : ',');
+      container.appendChild(closeLine);
+    }
 
     return line;
 

@@ -74,11 +74,13 @@ function setupMainTabs() {
       // Trigger appropriate initialization when switching to a tab
       if (mainTab === "go-struct") {
         // Re-trigger the active sub-tab
-        const activeSubTab = document.querySelector(".tab.active");
+        const goStructPanel = document.getElementById("main-tab-go-struct");
+        const activeSubTab = goStructPanel?.querySelector(".tab.active");
         if (activeSubTab) {
           const tab = activeSubTab.dataset.tab;
           if (tab === "sql") setTimeout(window.autoSqlConvert, 0);
           if (tab === "json") setTimeout(window.autoJsonConvert, 0);
+          if (tab === "struct2json") setTimeout(window.autoStruct2JsonConvert, 0);
           if (tab === "map") setTimeout(renderMappingTable, 0);
         }
       } else if (mainTab === "json-format") {
@@ -125,15 +127,18 @@ async function getTagTemplates() {
   return { sqlTags, jsonTags };
 }
 
-/* ===== Sub Tabs (SQL/JSON/Map) ===== */
+/* ===== Sub Tabs (SQL/JSON/Struct2JSON/Map) ===== */
 function setupTabs() {
-  document.querySelectorAll(".tab").forEach((btn) => {
+  const goStructPanel = document.getElementById("main-tab-go-struct");
+  if (!goStructPanel) return;
+
+  goStructPanel.querySelectorAll(".tab").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+      goStructPanel.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
 
       const tab = btn.dataset.tab;
-      document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+      goStructPanel.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
       const panel = document.getElementById(`tab-${tab}`);
       if (panel) panel.classList.add("active");
 
@@ -141,6 +146,7 @@ function setupTabs() {
       // 切换时触发一次自动转换/刷新映射
       if (tab === "sql") setTimeout(window.autoSqlConvert, 0);
       if (tab === "json") setTimeout(window.autoJsonConvert, 0);
+      if (tab === "struct2json") setTimeout(window.autoStruct2JsonConvert, 0);
       if (tab === "map") setTimeout(renderMappingTable, 0);
     });
   });
@@ -386,6 +392,37 @@ async function handleJsonConvert(silent = false) {
 window.autoSqlConvert = debounce(() => handleSqlConvert(true), 250);
 window.autoJsonConvert = debounce(() => handleJsonConvert(true), 250);
 
+/* ===== Struct→JSON convert handler ===== */
+async function handleStruct2JsonConvert(silent = false) {
+  try {
+    const input = ($('struct2jsonInput')?.value || '').trim();
+    if (!input) {
+      if ($('struct2jsonOutput')) $('struct2jsonOutput').value = '';
+      if (!silent) setMsg('');
+      return;
+    }
+
+    const defaultMode = document.querySelector('input[name="struct2jsonDefault"]:checked')?.value || 'zero';
+    const omitOmitempty = $('struct2jsonOmitOmitempty')?.checked || false;
+    const inlineEmbed = $('struct2jsonInline')?.checked || false;
+
+    const options = {
+      useExample: defaultMode === 'example',
+      omitOmitempty,
+      inlineEmbed,
+    };
+
+    const json = convertGoStructToJson(input, options); // from converter.js
+    if ($('struct2jsonOutput')) $('struct2jsonOutput').value = json;
+
+    if (!silent) setMsg('Struct → JSON 已更新');
+  } catch (e) {
+    if (!silent) setMsg(String(e?.message || e), true);
+  }
+}
+
+window.autoStruct2JsonConvert = debounce(() => handleStruct2JsonConvert(true), 250);
+
 /* ===== Mapping UI ===== */
 function addMapRow(sqlType = "", goType = "") {
   const tbody = $("mapBody");
@@ -513,6 +550,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("sqlText")?.addEventListener("input", debounce(resetSqlStructNameIfChanged, 200));
   $("sqlText")?.addEventListener("paste", () => setTimeout(resetSqlStructNameIfChanged, 0));
 
+  /* ===== Struct→JSON Buttons & Listeners ===== */
+  $("btnStruct2JsonConvert")?.addEventListener("click", () => handleStruct2JsonConvert(false));
+  $("btnStruct2JsonCopy")?.addEventListener("click", async () => {
+    await copyText($("struct2jsonOutput")?.value || "");
+    setMsg("已复制 JSON 输出");
+  });
+
+  $("struct2jsonInput")?.addEventListener("input", window.autoStruct2JsonConvert);
+  $("struct2jsonInput")?.addEventListener("paste", () => setTimeout(window.autoStruct2JsonConvert, 0));
+
+  // Struct→JSON option changes trigger auto convert
+  document.querySelectorAll('input[name="struct2jsonDefault"]').forEach(radio => {
+    radio.addEventListener('change', window.autoStruct2JsonConvert);
+  });
+  $("struct2jsonOmitOmitempty")?.addEventListener('change', window.autoStruct2JsonConvert);
+  $("struct2jsonInline")?.addEventListener('change', window.autoStruct2JsonConvert);
+
   /* ===== JSON Formatter Buttons ===== */
   $("btnJsonFormat")?.addEventListener("click", () => handleJsonFormat(false));
   $("btnJsonMinify")?.addEventListener("click", handleJsonMinify);
@@ -543,6 +597,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setTimeout(() => {
     window.autoSqlConvert();
     window.autoJsonConvert();
+    window.autoStruct2JsonConvert();
     window.autoJsonFormat();
   }, 0);
 

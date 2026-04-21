@@ -145,6 +145,7 @@
     /* 让 tab 面板在 content 内撑满 */
     #tab-sql.panel.active,
     #tab-json.panel.active,
+    #tab-struct2json.panel.active,
     #tab-map.panel.active {
       display: flex;
       flex-direction: column;
@@ -818,6 +819,9 @@
             <button class="tab" data-tab="json" title="JSON">
               <span class="short">JSON</span><span class="label">JSON</span>
             </button>
+            <button class="tab" data-tab="struct2json" title="Struct→JSON">
+              <span class="short">S→J</span><span class="label">Struct→JSON</span>
+            </button>
             <button class="tab" data-tab="map" title="映射">
               <span class="short">映射</span><span class="label">映射</span>
             </button>
@@ -941,6 +945,56 @@
             </div>
           </div>
         </section>
+
+        <!-- ================= Struct→JSON ================= -->
+        <section id="tab-struct2json" class="panel">
+
+          <!-- 选项 + 工具条合并为一行 -->
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+              <span style="font-size: 12px; color: #555; font-weight: 500;">默认值：</span>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 13px;">
+                <input type="radio" name="struct2jsonDefault" value="zero" checked style="width: auto;" />
+                <span>零值</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 13px;">
+                <input type="radio" name="struct2jsonDefault" value="example" style="width: auto;" />
+                <span>示例值</span>
+              </label>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center; flex-shrink: 0;">
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 13px;">
+                <input type="checkbox" id="struct2jsonOmitOmitempty" style="width: auto;" />
+                <span>忽略 omitempty</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 13px;">
+                <input type="checkbox" id="struct2jsonInline" style="width: auto;" />
+                <span>内联嵌套</span>
+              </label>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
+              <button id="btnStruct2JsonConvert">转换</button>
+              <button id="btnStruct2JsonCopy" class="secondary">复制输出</button>
+            </div>
+          </div>
+
+          <div class="split" style="grid-template-columns: 1fr 1fr;">
+            <div class="panel-box">
+              <div class="panel-title">Go Struct 输入</div>
+              <textarea id="struct2jsonInput" placeholder="type User struct {
+	ID    int64  `json:&quot;id&quot;`
+	Name  string `json:&quot;name&quot;`
+	Email string `json:&quot;email,omitempty&quot;`
+}"></textarea>
+            </div>
+
+            <div class="panel-box">
+              <div class="panel-title">JSON 输出</div>
+              <textarea id="struct2jsonOutput" readonly></textarea>
+            </div>
+          </div>
+        </section>
+
 
         <!-- ================= MAP ================= -->
         <section id="tab-map" class="panel">

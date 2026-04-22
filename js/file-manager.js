@@ -331,7 +331,7 @@ async function extractTextFromPdf(arrayBuffer, filename) {
             return `[无法提取 ${filename} 的内容：未加载 PDF 解析库]`;
         }
 
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
         const loadingTask = window.pdfjsLib.getDocument(new Uint8Array(arrayBuffer));
         const pdf = await loadingTask.promise;

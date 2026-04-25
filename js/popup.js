@@ -663,6 +663,46 @@ function unescapeStringValues(obj, indent = 2, currentIndent = 0) {
 
 
 
+// Robust JSON sanitizer to escape physical newlines/tabs inside string literals
+function sanitizeDirtyJson(str) {
+    let result = '';
+    let inString = false;
+    let escapeNext = false;
+    for (let i = 0; i < str.length; i++) {
+        let char = str[i];
+        if (inString) {
+            if (escapeNext) {
+                escapeNext = false;
+                result += char;
+            } else if (char === '\\') {
+                escapeNext = true;
+                result += char;
+            } else if (char === '"') {
+                inString = false;
+                result += char;
+            } else if (char === '\n') {
+                // If it's a newline splitting a word, maybe they just want it removed?
+                // But escaping it as \n is safer to preserve the character
+                result += '\\n';
+            } else if (char === '\r') {
+                result += '\\r';
+            } else if (char === '\t') {
+                result += '\\t';
+            } else {
+                result += char;
+            }
+        } else {
+            if (char === '"') {
+                inString = true;
+                result += char;
+            } else {
+                result += char;
+            }
+        }
+    }
+    return result;
+}
+
 async function handleJsonFormat(silent = false) {
   const outputEl = $("jsonFormatOutput");
   const outputWrapper = outputEl?.parentElement;
@@ -690,6 +730,9 @@ async function handleJsonFormat(silent = false) {
     // Sanitize input: remove BOM and other invisible characters
     input = input.replace(/^\uFEFF/, ''); // Remove BOM
     input = input.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width spaces
+    
+    // Safely escape any illegal control characters (like physical newlines) inside string literals
+    input = sanitizeDirtyJson(input);
 
     // Try to unescape the input if it contains backslash-escaped quotes
     // This handles cases like: [{\"tag\":\"137\"}] -> [{"tag":"137"}]

@@ -68,21 +68,41 @@ function resolveSqlTypeToGo(rawType, mergedMapping, nullable) {
   return mergedMapping[base] || "interface{}";
 }
 
-/* ===== 通用：按顶层逗号切分，忽略括号内逗号（decimal(10,2)）===== */
+/* ===== 通用：按顶层逗号切分，忽略括号内、引号内逗号 ===== */
 function splitByCommaIgnoringParens(text) {
   const res = [];
   let buf = "";
   let depth = 0;
+  let inQuote = false;
+  let quoteChar = null;
 
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
-    if (c === "(") depth++;
-    if (c === ")") depth = Math.max(0, depth - 1);
 
-    if (c === "," && depth === 0) {
-      res.push(buf);
-      buf = "";
-      continue;
+    if (!inQuote) {
+      if (c === "'" || c === '"' || c === "`") {
+        inQuote = true;
+        quoteChar = c;
+      } else if (c === "(") {
+        depth++;
+      } else if (c === ")") {
+        depth = Math.max(0, depth - 1);
+      } else if (c === "," && depth === 0) {
+        res.push(buf);
+        buf = "";
+        continue;
+      }
+    } else {
+      if (c === quoteChar) {
+        let escapeCount = 0;
+        for (let j = i - 1; j >= 0 && text[j] === '\\'; j--) {
+          escapeCount++;
+        }
+        if (escapeCount % 2 === 0) {
+          inQuote = false;
+          quoteChar = null;
+        }
+      }
     }
     buf += c;
   }
@@ -174,9 +194,13 @@ function parseCreateTableFields(sqlText) {
     // nullable：默认可空；出现 NOT NULL => 不可空
     const nullable = !/not\s+null/i.test(line);
 
-    // comment 'xxx'
-    const cm = line.match(/comment\s+'([^']*)'/i);
-    const comment = cm ? cm[1] : "";
+    // comment 'xxx' (支持内部包含反斜杠转义或两个单引号转义的情况，或者简单地使用贪婪匹配到最后一个单引号)
+    const cm = line.match(/\bcomment\s+'(.*)'/i);
+    let comment = cm ? cm[1] : "";
+    // 处理连续单引号转义 '' -> '
+    if (comment) {
+      comment = comment.replace(/''/g, "'").replace(/\\'/g, "'");
+    }
 
     fields.push({ name, rawType, nullable, comment });
   }

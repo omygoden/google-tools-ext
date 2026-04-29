@@ -495,8 +495,39 @@ async function handleMapReset() {
   setTimeout(window.autoSqlConvert, 0);
 }
 
+/* ===== Theme Setup ===== */
+async function setupTheme() {
+  const themeSelect = $("themeSelect");
+  if (!themeSelect) return;
+
+  // Load saved theme
+  const res = await chrome.storage.local.get(["appTheme"]);
+  const savedTheme = res.appTheme || "light";
+  
+  // Apply theme
+  themeSelect.value = savedTheme;
+  applyTheme(savedTheme);
+
+  // Listen for changes
+  themeSelect.addEventListener("change", async (e) => {
+    const newTheme = e.target.value;
+    applyTheme(newTheme);
+    await chrome.storage.local.set({ appTheme: newTheme });
+  });
+}
+
+function applyTheme(theme) {
+  document.body.classList.remove("theme-dark", "theme-sepia");
+  if (theme === "dark") {
+    document.body.classList.add("theme-dark");
+  } else if (theme === "sepia") {
+    document.body.classList.add("theme-sepia");
+  }
+}
+
 /* ===== Init ===== */
 document.addEventListener("DOMContentLoaded", async () => {
+  setupTheme();
   setupMainTabs();
   setupTabs();
 

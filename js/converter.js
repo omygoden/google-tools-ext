@@ -238,7 +238,7 @@ function buildDbHelpers_(structName, tableName) {
     `}`,
     "",
     `func (m *${s}) Model(ctx context.Context) *gorm.DB {`,
-    `\treturn models.Model(ctx).Model(m)`,
+    `\treturn models.Model(ctx).Table(m.TableName())`,
     `}`
   ].join("\n");
 }
